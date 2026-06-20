@@ -27,6 +27,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -159,6 +160,13 @@ public class CompensationFileService {
     public CompensationFile generateConsolidatedFile(LocalDate date) {
         LocalDateTime from = date.atStartOfDay();
         LocalDateTime to = date.plusDays(1).atStartOfDay();
+
+        Optional<CompensationFile> existing = compensationFileRepository.findByFileTypeAndPeriodFrom("CONSOLIDADO", from);
+        if (existing.isPresent()) {
+            throw new FileGenerationException(
+                    "Ya existe un consolidado generado para el " + date + ". Solo se permite uno por día."
+            );
+        }
 
         List<OffUsPayment> payments = offUsPaymentRepository.findByCreatedAtBetween(from, to);
         if (payments.isEmpty()) {
