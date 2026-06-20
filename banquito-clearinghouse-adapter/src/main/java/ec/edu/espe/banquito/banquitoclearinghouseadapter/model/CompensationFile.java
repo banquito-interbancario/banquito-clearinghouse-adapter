@@ -19,6 +19,10 @@ public class CompensationFile {
 
     private String filePath;
 
+    private String txtFilePath;
+
+    private String pdfFilePath;
+
     private Integer offUsRecords;
 
     private BigDecimal totalAmount;
@@ -57,6 +61,22 @@ public class CompensationFile {
 
     public void setFilePath(String filePath) {
         this.filePath = filePath;
+    }
+
+    public String getTxtFilePath() {
+        return txtFilePath;
+    }
+
+    public void setTxtFilePath(String txtFilePath) {
+        this.txtFilePath = txtFilePath;
+    }
+
+    public String getPdfFilePath() {
+        return pdfFilePath;
+    }
+
+    public void setPdfFilePath(String pdfFilePath) {
+        this.pdfFilePath = pdfFilePath;
     }
 
     public Integer getOffUsRecords() {

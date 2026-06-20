@@ -95,14 +95,14 @@ public class CompensationFileService {
         }
     }
 
-    @Scheduled(fixedRate = 30000) // Runs every 30 seconds
+    @Scheduled(fixedRate = 30000)
     public void generateSpiFile() {
         List<OffUsPayment> pendingPayments = offUsPaymentRepository.findByStatus(PaymentStatus.RECEIVED);
         if (pendingPayments.isEmpty()) {
             return;
         }
 
-        log.info("Generando archivo plano SPI para el Banco Central con {} transacciones...", pendingPayments.size());
+        log.info("Generando archivo SPI para el Banco Central con {} transacciones...", pendingPayments.size());
 
         try {
             File dir = resolveOutputDirectory();
@@ -110,30 +110,112 @@ public class CompensationFileService {
                 dir.mkdirs();
             }
 
-            String filename = "SPI_BCE_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".csv";
-            File file = new File(dir, filename);
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            File csvFile = new File(dir, "SPI_BCE_" + timestamp + ".csv");
+            File txtFile = new File(dir, "SPI_BCE_" + timestamp + ".txt");
+            File pdfFile = new File(dir, "SPI_BCE_" + timestamp + ".pdf");
 
-            try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
-                writer.println("TRX_ID,ROUTING_CODE,ORIGIN_ACCOUNT,DESTINATION_ACCOUNT,AMOUNT,DATE");
-                for (OffUsPayment payment : pendingPayments) {
-                    writer.printf("%s,%s,%s,%s,%.2f,%s%n",
-                            payment.getTransactionId(),
-                            payment.getRoutingCode(),
-                            payment.getOriginAccount(),
-                            payment.getDestinationAccount(),
-                            payment.getAmount(),
-                            payment.getCreatedAt()
-                    );
-                    payment.setStatus(PaymentStatus.ACCOUNTED);
-                }
+            writeSpiCsv(csvFile, pendingPayments);
+            writeSpiTxt(txtFile, pendingPayments);
+            writeSpiPdf(pdfFile, pendingPayments, timestamp);
+
+            BigDecimal total = pendingPayments.stream()
+                    .map(OffUsPayment::getAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            UUID cycleId = UUID.randomUUID();
+            CompensationFile file = new CompensationFile();
+            file.setBatchId(cycleId);
+            file.setFileName(csvFile.getName());
+            file.setFilePath(csvFile.getAbsolutePath());
+            file.setTxtFilePath(txtFile.getAbsolutePath());
+            file.setPdfFilePath(pdfFile.getAbsolutePath());
+            file.setOffUsRecords(pendingPayments.size());
+            file.setTotalAmount(total);
+            file.setStatus(ec.edu.espe.banquito.banquitoclearinghouseadapter.enums.FileStatus.GENERATED);
+            file.setGeneratedAt(LocalDateTime.now(ZoneId.systemDefault()));
+            compensationFileRepository.save(file);
+
+            for (OffUsPayment payment : pendingPayments) {
+                payment.setStatus(PaymentStatus.ACCOUNTED);
             }
-
             offUsPaymentRepository.saveAll(pendingPayments);
-            log.info("Archivo SPI generado exitosamente: {}", file.getAbsolutePath());
+
+            log.info("Archivo SPI generado exitosamente: {} / {} / {}",
+                    csvFile.getName(), txtFile.getName(), pdfFile.getName());
 
         } catch (Exception e) {
             log.error("Error generando el archivo SPI: {}", e.getMessage());
         }
+    }
+
+    private void writeSpiCsv(File file, List<OffUsPayment> payments) throws IOException {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(file))) {
+            writer.println("TRX_ID,ROUTING_CODE,ORIGIN_ACCOUNT,DESTINATION_ACCOUNT,AMOUNT,DATE");
+            for (OffUsPayment payment : payments) {
+                writer.printf("%s,%s,%s,%s,%.2f,%s%n",
+                        payment.getTransactionId(),
+                        payment.getRoutingCode(),
+                        payment.getOriginAccount(),
+                        payment.getDestinationAccount(),
+                        payment.getAmount(),
+                        payment.getCreatedAt()
+                );
+            }
+        }
+    }
+
+    private void writeSpiTxt(File file, List<OffUsPayment> payments) throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            writer.write("transactionId|routingCode|originAccount|destinationAccount|amount|currency|valueDate");
+            writer.newLine();
+            for (OffUsPayment payment : payments) {
+                writer.write(String.join("|",
+                        String.valueOf(payment.getTransactionId()),
+                        String.valueOf(payment.getRoutingCode()),
+                        String.valueOf(payment.getOriginAccount()),
+                        String.valueOf(payment.getDestinationAccount()),
+                        payment.getAmount() != null ? payment.getAmount().toPlainString() : "0",
+                        String.valueOf(payment.getCurrency()),
+                        String.valueOf(payment.getValueDate())
+                ));
+                writer.newLine();
+            }
+        }
+    }
+
+    private void writeSpiPdf(File file, List<OffUsPayment> payments, String timestamp) throws java.io.FileNotFoundException, com.lowagie.text.DocumentException {
+        com.lowagie.text.Document document = new com.lowagie.text.Document(com.lowagie.text.PageSize.A4.rotate());
+        com.lowagie.text.pdf.PdfWriter.getInstance(document, new java.io.FileOutputStream(file));
+        document.open();
+
+        com.lowagie.text.Font titleFont = com.lowagie.text.FontFactory.getFont(com.lowagie.text.FontFactory.HELVETICA_BOLD, 16);
+        com.lowagie.text.Font headerFont = com.lowagie.text.FontFactory.getFont(com.lowagie.text.FontFactory.HELVETICA_BOLD, 9, java.awt.Color.WHITE);
+        com.lowagie.text.Font rowFont = com.lowagie.text.FontFactory.getFont(com.lowagie.text.FontFactory.HELVETICA, 9);
+
+        com.lowagie.text.Paragraph title = new com.lowagie.text.Paragraph("Archivo SPI — Banco Central (Ciclo " + timestamp + ")", titleFont);
+        title.setSpacingAfter(12);
+        document.add(title);
+
+        com.lowagie.text.pdf.PdfPTable table = new com.lowagie.text.pdf.PdfPTable(6);
+        table.setWidthPercentage(100);
+        for (String h : new String[]{"TRX ID", "Routing", "Cuenta origen", "Cuenta destino", "Monto", "Fecha"}) {
+            com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell(new com.lowagie.text.Phrase(h, headerFont));
+            cell.setBackgroundColor(new java.awt.Color(30, 58, 138));
+            cell.setPadding(5);
+            table.addCell(cell);
+        }
+        for (OffUsPayment payment : payments) {
+            table.addCell(new com.lowagie.text.Phrase(String.valueOf(payment.getTransactionId()), rowFont));
+            table.addCell(new com.lowagie.text.Phrase(String.valueOf(payment.getRoutingCode()), rowFont));
+            table.addCell(new com.lowagie.text.Phrase(String.valueOf(payment.getOriginAccount()), rowFont));
+            table.addCell(new com.lowagie.text.Phrase(String.valueOf(payment.getDestinationAccount()), rowFont));
+            table.addCell(new com.lowagie.text.Phrase("$" + payment.getAmount(), rowFont));
+            table.addCell(new com.lowagie.text.Phrase(String.valueOf(payment.getCreatedAt()), rowFont));
+        }
+        document.add(table);
+        document.close();
     }
 
     private String buildFileName(UUID batchId) {
