@@ -48,7 +48,7 @@ public class ClearingController {
     @PostMapping("/files/consolidate")
     public ResponseEntity<CompensationFileResponse> consolidate(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        CompensationFile file = compensationFileService.generateConsolidatedFile(date != null ? date : LocalDate.now());
+        CompensationFile file = compensationFileService.generateConsolidatedFile(date != null ? date : LocalDate.now(APP_ZONE));
         return ResponseEntity.ok(CompensationFileMapper.toResponse(file));
     }
 
