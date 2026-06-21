@@ -29,6 +29,13 @@ public class RabbitMQConfig {
         return new Queue(queueName, true);
     }
 
+    // Cola consumida por ClearingQueryService.consume(); se declara aqui para
+    // que exista en cualquier broker (sin esto, un broker nuevo no la crea).
+    @Bean
+    public Queue clearingQueryQueue() {
+        return new Queue("clearing-query-queue", true);
+    }
+
     @Bean
     public DirectExchange clearingExchange() {
         return new DirectExchange(exchangeName, true, false);
