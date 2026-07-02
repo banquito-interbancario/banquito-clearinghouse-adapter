@@ -5,7 +5,7 @@ import ec.edu.espe.banquito.banquitoclearinghouseadapter.dto.OffUsPaymentMessage
 import ec.edu.espe.banquito.banquitoclearinghouseadapter.exception.BatchNotFoundException;
 import ec.edu.espe.banquito.banquitoclearinghouseadapter.model.CompensationFile;
 import ec.edu.espe.banquito.banquitoclearinghouseadapter.repository.CompensationFileRepository;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
@@ -19,7 +19,7 @@ public class ClearingQueryService {
         this.compensationFileRepository = compensationFileRepository;
     }
 
-    @RabbitListener(queues = "clearing-query-queue")
+    @KafkaListener(topics = "clearing-query", groupId = "${spring.kafka.consumer.group-id:clearinghouse-adapter}")
     public void consume(OffUsPaymentMessage message){
         offUsConsumerService.process(message);
     }
