@@ -28,4 +28,4 @@ jobs:
           context: ./banquito-clearinghouse-adapter
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/banco-banquito/clearinghouse-adapter:latest
+          tags: ghcr.io/banquito-interbancario/clearinghouse-adapter:latest
