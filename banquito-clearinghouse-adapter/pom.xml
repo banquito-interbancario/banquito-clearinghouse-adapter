@@ -91,6 +91,14 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- spring-kafka's JsonDeserializer builds its own classic-Jackson
+             ObjectMapper and needs this module explicitly to deserialize
+             java.time fields (e.g. OffUsPaymentMessage.valueDate) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
